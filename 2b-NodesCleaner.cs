@@ -4,24 +4,92 @@ using Xunit.Abstractions;
 namespace MidInterviewTest;
 
 /*
-    The task is to remove from the object tree all nodes
-    where the Alive property is false. However, if a node
-    has an Alive property that is true, all of its parents
-    and children should remain in the tree.
+    Задача состоит в удалении из дерева объектов всех узлов,
+    у которых свойство Alive имеет значение false. Однако, если у узла
+    свойство Alive имеет значение true, все его родители
+    и потомки должны остаться в дереве.
 
     Extra:
-    Perform the task using recursive and iterative algorithms,
-    explain in which cases each one should be used, as well as
-    the advantages and disadvantages of each approach.
+    Выполните задание, используя рекурсивные и итеративные алгоритмы,
+    объясните, в каких случаях следует использовать каждый из них, а также
+    преимущества и недостатки каждого подхода.
 */
 
 public record Node(int Id, int? ParentId, bool Alive, List<Node> Children);
 
 public static class NodesCleaner
 {
+    /*
+        Оптимальный подход — два прохода:
+
+        Снизу вверх: помечаем, какие узлы нужно сохранить (у них или потомков есть Alive = true)
+        Сверху вниз: фильтруем детей, оставляя только помеченные
+
+        Принцип работы рекурсивного алгоритма:
+        Рекурсия идёт в глубину (post-order traversal)
+        Когда возвращаемся из рекурсии, уже знаем, есть ли живые потомки
+        Если node.Alive = true — сохраняем узел и всех его потомков (они уже обработаны, но не удалены, потому что родитель жив)
+        Если node.Alive = false, но есть живой потомок — цепочка предков сохраняется через возврат true
+    */
+    // Рекурсивный алгоритм очистки дерева
     public static void Clean(Node root)
     {
-        throw new NotImplementedException();
+        MarkAndSweep(root);
+    }
+
+    // Возвращает true, если этот узел или любой из его потомков Alive
+    private static bool MarkAndSweep(Node node)
+    {
+        // Рекурсивно обрабатываем детей и фильтруем
+        // Оставляем только тех, у кого есть живые потомки (или они сами живые)
+        var childrenToKeep = new List<Node>();
+        
+        foreach (var child in node.Children)
+        {
+            if (MarkAndSweep(child))
+            {
+                childrenToKeep.Add(child);
+            }
+        }
+        
+        node.Children.Clear();
+        node.Children.AddRange(childrenToKeep);
+        
+        // Этот узел сохраняем, если он сам Alive ИЛИ у него остались дети
+        return node.Alive || childrenToKeep.Count > 0;
+    }
+
+    // Итеративный алгоритм очистки дерева
+    public static void CleanIterative(Node root)
+    {
+        var stack = new Stack<(Node node, bool processed)>();
+        var keepNode = new Dictionary<Node, bool>();
+        
+        stack.Push((root, false));
+        
+        while (stack.Count > 0)
+        {
+            var (node, processed) = stack.Pop();
+            
+            if (!processed)
+            {
+                stack.Push((node, true)); // вернёмся после обработки детей
+                foreach (var child in node.Children)
+                    stack.Push((child, false));
+            }
+            else
+            {
+                // Post-order: все дети уже обработаны
+                var childrenToKeep = node.Children
+                    .Where(c => keepNode.GetValueOrDefault(c))
+                    .ToList();
+                
+                node.Children.Clear();
+                node.Children.AddRange(childrenToKeep);
+                
+                keepNode[node] = node.Alive || childrenToKeep.Count > 0;
+            }
+        }
     }
 }
 
